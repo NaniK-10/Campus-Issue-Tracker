@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <title>Audit Trail - Campus Issue Tracker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link th:href="@{/css/dashboard.css}" rel="stylesheet">
+    <style>
+        .audit-timeline { padding: 10px 0; }
+        .audit-entry {
+            display: flex;
+            gap: 18px;
+            padding: 18px 24px;
+            border-bottom: 1px solid #f1f5f9;
+            animation: rowIn 0.5s ease forwards;
+            opacity: 0;
+            transition: background 0.2s;
+        }
+        .audit-entry:hover { background: #f8fafc; }
+        .audit-entry:last-child { border-bottom: none; }
+        .audit-entry:nth-child(1)  { animation-delay: 0.05s; }
+        .audit-entry:nth-child(2)  { animation-delay: 0.10s; }
+        .audit-entry:nth-child(3)  { animation-delay: 0.15s; }
+        .audit-entry:nth-child(4)  { animation-delay: 0.20s; }
+        .audit-entry:nth-child(5)  { animation-delay: 0.25s; }
+        .audit-entry:nth-child(n+6){ animation-delay: 0.30s; }
+        @keyframes rowIn { from{opacity:0;transform:translateX(-10px)} to{opacity:1;transform:translateX(0)} }
+        .audit-icon {
+            width: 40px; height: 40px;
+            border-radius: 14px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        .audit-icon-create  { background: rgba(34,197,94,0.12);  color: #22c55e; }
+        .audit-icon-update  { background: rgba(59,130,246,0.12); color: #3b82f6; }
+        .audit-icon-delete  { background: rgba(239,68,68,0.12);  color: #ef4444; }
+        .audit-icon-status  { background: rgba(139,92,255,0.12); color: #8b5cff; }
+        .audit-icon-default { background: rgba(100,116,139,0.12);color: #64748b; }
+        .audit-body { flex: 1; min-width: 0; }
+        .audit-action { font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 3px; }
+        .audit-meta   { font-size: 12px; color: #94a3b8; }
+        .audit-meta strong { color: #64748b; }
+        .audit-time   { font-size: 12px; color: #94a3b8; white-space: nowrap; flex-shrink: 0; }
+        .search-bar { border-radius: 14px; border: 1.5px solid #e2e8f0; font-size: 14px; padding: 10px 16px; width: 100%; transition: all 0.25s; }
+        .search-bar:focus { border-color: #667eea; box-shadow: 0 0 0 3px rgba(102,126,234,0.15); outline: none; }
+        .empty-state { text-align:center; padding:60px 20px; color:#94a3b8; }
+        .empty-state i { font-size:48px; display:block; margin-bottom:16px; opacity:0.3; }
+    </style>
+</head>
+<body>
+
+<!-- Topnav -->
+<nav class="dash-topnav">
+    <a href="/" class="dash-brand">
+        <img th:src="@{/images/iitp-logo.png}" alt="IIT Patna"/>
+        <div class="dash-brand-text">Campus Issue Tracker <small>IIT Patna</small></div>
+    </a>
+    <div class="dash-nav-actions">
+        <a th:href="@{/dashboard}" class="btn-nav-action btn-info-solid">
+            <i class="fa fa-arrow-left"></i> Back to Dashboard
+        </a>
+        <form th:action="@{/logout}" method="post" style="margin:0;">
+            <button type="submit" class="btn-nav-action btn-danger-solid">
+                <i class="fa fa-sign-out-alt"></i> Logout
+            </button>
+        </form>
+    </div>
+</nav>
+
+<div class="dash-main">
+    <!-- Header card -->
+    <div class="issues-card mb-4" style="opacity:1;">
+        <div class="issues-card-header">
+            <h5 class="issues-card-title">
+                <span class="title-dot"></span>
+                Audit Trail
+            </h5>
+            <span class="text-muted" style="font-size:13px;font-weight:600;">
+                <span th:text="${logs != null ? logs.size() : 0}">0</span> log entries
+            </span>
+        </div>
+
+        <div class="p-3 border-bottom" style="background:#f8fafc;">
+            <div class="row g-2 align-items-center">
+                <div class="col-md-5">
+                    <div style="position:relative;">
+                        <i class="fa fa-search" style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#94a3b8;font-size:14px;"></i>
+                        <input type="text" class="search-bar" id="auditSearch" placeholder="Search by action, user, or entity…"
+                               style="padding-left:40px;" oninput="filterAudit(this.value)"/>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select" id="actionFilter" onchange="filterAudit(document.getElementById('auditSearch').value)"
+                            style="border-radius:12px;border:1.5px solid #e2e8f0;font-size:14px;font-weight:600;">
+                        <option value="">All Actions</option>
+                        <option value="CREATE">CREATE</option>
+                        <option value="UPDATE">UPDATE / STATUS</option>
+                        <option value="DELETE">DELETE</option>
+                        <option value="FEEDBACK">FEEDBACK</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div id="auditBody">
+            <div th:if="${logs == null or logs.isEmpty()}" class="empty-state">
+                <i class="fa fa-history"></i>
+                <h5>No audit logs found</h5>
+                <p>Logs will appear here as staff and admins perform actions.</p>
+            </div>
+
+            <div class="audit-timeline" th:unless="${logs == null or logs.isEmpty()}">
+                <div class="audit-entry" th:each="log : ${logs}"
+                     th:attr="data-action=${log.eventType},data-user=${log.username},data-entity=${log.relatedType}">
+
+                    <!-- Icon based on action -->
+                    <div th:class="'audit-icon ' +
+                        (${log.eventType != null and #strings.contains(log.eventType,'CREATE')} ? 'audit-icon-create' :
+                        (${log.eventType != null and #strings.contains(log.eventType,'STATUS')} ? 'audit-icon-status' :
+                        (${log.eventType != null and #strings.contains(log.eventType,'UPDATE')} ? 'audit-icon-update' :
+                        (${log.eventType != null and #strings.contains(log.eventType,'DELETE')} ? 'audit-icon-delete' :
+                        'audit-icon-default'))))">
+                        <i th:class="'fa ' +
+                            (${log.eventType != null and #strings.contains(log.eventType,'CREATE')} ? 'fa-plus-circle' :
+                            (${log.eventType != null and #strings.contains(log.eventType,'STATUS')} ? 'fa-exchange-alt' :
+                            (${log.eventType != null and #strings.contains(log.eventType,'UPDATE')} ? 'fa-edit' :
+                            (${log.eventType != null and #strings.contains(log.eventType,'DELETE')} ? 'fa-trash' :
+                            'fa-info-circle'))))"></i>
+                    </div>
+
+                    <div class="audit-body">
+                        <div class="audit-action" th:text="${log.eventType}">ACTION</div>
+                        <div class="audit-meta">
+                            By <strong th:text="${log.username}">user</strong>
+                            <span th:if="${log.relatedType != null}">
+                                &nbsp;·&nbsp; Entity: <strong th:text="${log.relatedType}">type</strong>
+                                <span th:if="${log.relatedId != null}"> #<span th:text="${log.relatedId}"></span></span>
+                            </span>
+                            <span th:if="${log.details != null and !#strings.isEmpty(log.details)}">
+                                &nbsp;·&nbsp; <span th:text="${log.details}"></span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="audit-time">
+                        <i class="fa fa-clock me-1"></i>
+                        <span th:if="${log.timestamp != null}" th:text="${#temporals.format(log.timestamp,'dd MMM, HH:mm')}">—</span>
+                        <span th:unless="${log.timestamp != null}">—</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+function filterAudit(searchVal) {
+    const actionVal = document.getElementById('actionFilter').value.toLowerCase();
+    const sv = (searchVal || '').toLowerCase();
+    const entries = document.querySelectorAll('.audit-entry');
+    entries.forEach(e => {
+        const action = (e.getAttribute('data-action') || '').toLowerCase();
+        const user   = (e.getAttribute('data-user')   || '').toLowerCase();
+        const entity = (e.getAttribute('data-entity') || '').toLowerCase();
+        const matchSearch = !sv || action.includes(sv) || user.includes(sv) || entity.includes(sv);
+        const matchAction = !actionVal || action.includes(actionVal);
+        e.style.display = (matchSearch && matchAction) ? '' : 'none';
+    });
+}
+</script>
+</body>
+</html>

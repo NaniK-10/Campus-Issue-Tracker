@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Register - Campus Issue Tracker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link th:href="@{/css/landing.css}" rel="stylesheet">
+    <style>
+        .login-wrapper {
+            position: relative; z-index: 2;
+            min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            padding: 40px 16px;
+        }
+        .login-card {
+            background: rgba(255,255,255,0.10);
+            border-radius: 28px;
+            padding: 44px 42px;
+            color: white;
+            backdrop-filter: blur(22px);
+            -webkit-backdrop-filter: blur(22px);
+            border: 1px solid rgba(255,255,255,0.13);
+            box-shadow: 0 32px 64px rgba(0,0,0,0.5);
+            width: 100%;
+            max-width: 460px;
+            animation: cardPop 0.7s cubic-bezier(0.34,1.56,0.64,1) forwards;
+            opacity: 0;
+            transform: translateY(30px) scale(0.97);
+        }
+        @keyframes cardPop { to { opacity:1; transform:translateY(0) scale(1); } }
+        .login-logo { height: 52px; filter: drop-shadow(0 0 14px rgba(77,163,255,0.5)); margin-bottom:6px; }
+        .login-title { font-size: 24px; font-weight: 900; margin:0 0 4px; }
+        .login-subtitle { font-size: 13px; color: rgba(255,255,255,0.45); margin-bottom: 26px; }
+        .field-group { margin-bottom: 18px; }
+        .field-label { display:block; font-size:13px; font-weight:700; color:rgba(255,255,255,0.7); margin-bottom:7px; }
+        .field-input-wrap { position:relative; }
+        .field-icon { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:rgba(255,255,255,0.38); font-size:14px; pointer-events:none; transition:color 0.25s; }
+        .toggle-pw { position:absolute; right:14px; top:50%; transform:translateY(-50%); color:rgba(255,255,255,0.38); cursor:pointer; font-size:14px; background:none; border:none; padding:0; transition:color 0.25s; }
+        .toggle-pw:hover { color:rgba(255,255,255,0.85); }
+        .form-ctrl {
+            width:100%; padding:13px 44px;
+            background:rgba(255,255,255,0.07);
+            border:1.5px solid rgba(255,255,255,0.13);
+            border-radius:14px;
+            color:white; font-size:14px; font-family:inherit; font-weight:500;
+            transition:all 0.25s; outline:none;
+        }
+        .form-ctrl::placeholder { color:rgba(255,255,255,0.28); }
+        .form-ctrl:focus { background:rgba(255,255,255,0.12); border-color:var(--accent); box-shadow:0 0 0 3px rgba(77,163,255,0.18); color:white; }
+        .field-input-wrap:focus-within .field-icon { color:var(--accent); }
+
+        /* Password strength */
+        .strength-bar-wrap { margin-top:10px; }
+        .strength-bar-track { height:5px; background:rgba(255,255,255,0.08); border-radius:10px; overflow:hidden; margin-bottom:6px; }
+        .strength-bar-fill { height:100%; border-radius:10px; width:0%; transition:width 0.4s ease, background 0.4s ease; }
+        .strength-label { font-size:12px; font-weight:700; }
+        .strength-hints { margin-top:8px; display:flex; flex-wrap:wrap; gap:5px; }
+        .hint-chip {
+            font-size:11px; padding:3px 9px; border-radius:20px;
+            background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.09);
+            color:rgba(255,255,255,0.4); transition:all 0.3s; display:inline-flex; align-items:center; gap:4px;
+        }
+        .hint-chip.ok { background:rgba(34,197,94,0.15); border-color:rgba(34,197,94,0.35); color:#4ade80; }
+
+        .btn-register {
+            width:100%; padding:14px;
+            background:linear-gradient(135deg,var(--accent),var(--accent2));
+            border:none; border-radius:16px;
+            color:white; font-size:16px; font-weight:900; font-family:inherit;
+            cursor:pointer; transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+            margin-top:6px;
+        }
+        .btn-register:hover { transform:translateY(-2px) scale(1.01); box-shadow:0 12px 32px rgba(77,163,255,0.45); }
+        .btn-register:disabled { opacity:0.45; cursor:not-allowed; transform:none; box-shadow:none; }
+
+        .login-alert { border-radius:12px; padding:12px 16px; font-size:14px; font-weight:600; margin-bottom:18px; display:flex; align-items:center; gap:10px; }
+        .login-alert-error { background:rgba(239,68,68,0.18); border:1px solid rgba(239,68,68,0.35); color:#fca5a5; }
+        .text-link { color:var(--accent); text-decoration:none; font-weight:700; transition:color 0.2s; }
+        .text-link:hover { color:#fff; text-decoration:underline; }
+        .back-home {
+            position:fixed; top:20px; left:24px; z-index:20;
+            color:rgba(255,255,255,0.6); text-decoration:none; font-size:14px; font-weight:700;
+            display:flex; align-items:center; gap:8px;
+            background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.12);
+            padding:8px 16px; border-radius:12px; backdrop-filter:blur(12px); transition:all 0.25s;
+        }
+        .back-home:hover { color:white; background:rgba(255,255,255,0.14); }
+        select.form-ctrl { padding-left:44px; appearance:none; }
+        @media (max-width:480px) { .login-card { padding:28px 20px; } }
+    </style>
+</head>
+<body>
+    <div class="bg-layer" aria-hidden="true"></div>
+    <div class="bg-overlay" aria-hidden="true"></div>
+    <div class="glow-orb glow-orb-1" aria-hidden="true"></div>
+    <div class="glow-orb glow-orb-2" aria-hidden="true"></div>
+
+    <a href="/" class="back-home"><i class="fa fa-arrow-left"></i> Home</a>
+
+    <div class="login-wrapper">
+        <div class="login-card">
+            <div class="text-center mb-4">
+                <img th:src="@{/images/iitp-logo.png}" alt="IIT Patna" class="login-logo"/>
+                <div class="login-title">Create Account</div>
+                <div class="login-subtitle">Join IIT Patna Campus Issue Tracker</div>
+            </div>
+
+            <div th:if="${error}" class="login-alert login-alert-error">
+                <i class="fa fa-exclamation-circle"></i>
+                <span th:text="${error}">Error occurred.</span>
+            </div>
+
+            <form th:action="@{/signup}" method="post" id="signupForm" novalidate>
+
+                <div class="field-group">
+                    <label class="field-label" for="username">Username</label>
+                    <div class="field-input-wrap">
+                        <i class="fa fa-user field-icon"></i>
+                        <input type="text" id="username" name="username" class="form-ctrl"
+                               placeholder="Choose a username" required autocomplete="username"/>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label class="field-label" for="email">Email Address</label>
+                    <div class="field-input-wrap">
+                        <i class="fa fa-envelope field-icon"></i>
+                        <input type="email" id="email" name="email" class="form-ctrl"
+                               placeholder="your@iitp.ac.in" required autocomplete="email"/>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label class="field-label" for="password">Password</label>
+                    <div class="field-input-wrap">
+                        <i class="fa fa-lock field-icon"></i>
+                        <input type="password" id="password" name="password" class="form-ctrl"
+                               placeholder="Create a strong password" required autocomplete="new-password"
+                               oninput="checkStrength(this.value)"/>
+                        <button type="button" class="toggle-pw" onclick="togglePw('password','eye1')">
+                            <i class="fa fa-eye" id="eye1"></i>
+                        </button>
+                    </div>
+
+                    <!-- Strength bar -->
+                    <div class="strength-bar-wrap" id="strengthWrap" style="display:none;">
+                        <div class="strength-bar-track">
+                            <div class="strength-bar-fill" id="strengthBar"></div>
+                        </div>
+                        <span class="strength-label" id="strengthLabel"></span>
+                        <div class="strength-hints">
+                            <span class="hint-chip" id="hint-len"><i class="fa fa-times"></i> 8+ chars</span>
+                            <span class="hint-chip" id="hint-upper"><i class="fa fa-times"></i> Uppercase</span>
+                            <span class="hint-chip" id="hint-lower"><i class="fa fa-times"></i> Lowercase</span>
+                            <span class="hint-chip" id="hint-num"><i class="fa fa-times"></i> Number</span>
+                            <span class="hint-chip" id="hint-special"><i class="fa fa-times"></i> Symbol</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label class="field-label" for="role">Role</label>
+                    <div class="field-input-wrap">
+                        <i class="fa fa-id-badge field-icon"></i>
+                        <select id="role" name="role" class="form-ctrl">
+                            <option value="ROLE_STUDENT">Student</option>
+                            <option value="ROLE_STAFF">Staff</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-register" id="registerBtn" disabled>
+                    <i class="fa fa-user-plus me-2"></i> Create Account
+                </button>
+            </form>
+
+            <p class="text-center mt-4 mb-0" style="color:rgba(255,255,255,0.45); font-size:14px;">
+                Already have an account? <a href="/login" class="text-link">Sign In</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        const bg = document.querySelector(".bg-layer");
+        if (!bg) return;
+        let latestY = 0, ticking = false;
+        function update() { ticking=false; bg.style.transform=`translate3d(0,${latestY*0.18}px,0) scale(1.06)`; }
+        window.addEventListener("scroll",()=>{ latestY=window.scrollY||0; if(!ticking){ticking=true;requestAnimationFrame(update);} },{passive:true});
+    })();
+
+    function togglePw(id, iconId) {
+        const inp = document.getElementById(id);
+        const icon = document.getElementById(iconId);
+        if (inp.type === 'password') { inp.type='text'; icon.className='fa fa-eye-slash'; }
+        else { inp.type='password'; icon.className='fa fa-eye'; }
+    }
+
+    function checkStrength(val) {
+        const wrap = document.getElementById('strengthWrap');
+        const bar  = document.getElementById('strengthBar');
+        const lbl  = document.getElementById('strengthLabel');
+        const btn  = document.getElementById('registerBtn');
+
+        if (!val) { wrap.style.display='none'; btn.disabled=true; return; }
+        wrap.style.display='block';
+
+        const has = {
+            len:     val.length >= 8,
+            upper:   /[A-Z]/.test(val),
+            lower:   /[a-z]/.test(val),
+            num:     /[0-9]/.test(val),
+            special: /[^A-Za-z0-9]/.test(val)
+        };
+
+        // Update hint chips
+        Object.entries(has).forEach(([k,ok]) => {
+            const chip = document.getElementById('hint-'+k);
+            if (!chip) return;
+            chip.classList.toggle('ok', ok);
+            chip.querySelector('i').className = ok ? 'fa fa-check' : 'fa fa-times';
+        });
+
+        const score = Object.values(has).filter(Boolean).length;
+        const levels = [
+            { pct:'20%', color:'#ef4444', text:'Too Weak' },
+            { pct:'40%', color:'#f97316', text:'Weak' },
+            { pct:'60%', color:'#eab308', text:'Fair' },
+            { pct:'80%', color:'#22c55e', text:'Strong' },
+            { pct:'100%',color:'#10b981', text:'Very Strong' }
+        ];
+        const lv = levels[score - 1] || levels[0];
+        bar.style.width = lv.pct;
+        bar.style.background = lv.color;
+        lbl.textContent = lv.text;
+        lbl.style.color = lv.color;
+
+        // Allow submit only if Strong (score >= 4)
+        btn.disabled = score < 4;
+    }
+    </script>
+</body>
+</html>

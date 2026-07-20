@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+      th:lang="${#locale.language}">
+<head>
+    <title th:text="#{app.name}">Campus Issue Tracker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link th:href="@{/css/landing.css}" rel="stylesheet">
+</head>
+
+<body>
+<main class="landing">
+
+    <!-- Parallax background (IIT Patna photo) -->
+    <div class="bg-layer" aria-hidden="true"></div>
+    <div class="bg-overlay" aria-hidden="true"></div>
+
+    <!-- Glowing orbs -->
+    <div class="glow-orb glow-orb-1" aria-hidden="true"></div>
+    <div class="glow-orb glow-orb-2" aria-hidden="true"></div>
+    <div class="glow-orb glow-orb-3" aria-hidden="true"></div>
+
+    <!-- TOP BAR -->
+    <header class="topbar">
+        <div class="brand">
+            <img th:src="@{/images/iitp-logo.png}" th:alt="#{app.name}" class="logo"/>
+            <div class="system-name">
+                <span th:text="#{app.name}">Campus Issue Tracker</span>
+                <small>IIT Patna</small>
+            </div>
+        </div>
+
+        <!-- Anonymous user: show Login + Register -->
+        <div class="top-actions" th:if="${#authorization.expression('isAnonymous()')}">
+            <div th:replace="~{fragments/language-switcher :: language-switcher}"></div>
+            <a class="btn-ghost" th:href="@{/login}">
+                <i class="fa fa-sign-in-alt"></i>
+                <span th:text="#{nav.login}">Login</span>
+            </a>
+            <a class="btn-primary-solid" th:href="@{/signup}">
+                <i class="fa fa-user-plus"></i>
+                <span th:text="#{nav.register}">Register</span>
+            </a>
+        </div>
+
+        <!-- Authenticated user: show Dashboard -->
+        <div class="top-actions" th:if="${#authorization.expression('isAuthenticated()')}">
+            <div th:replace="~{fragments/language-switcher :: language-switcher}"></div>
+            <a class="btn-ghost" th:href="@{/report-options}" sec:authorize="hasRole('STUDENT')">
+                <i class="fa fa-plus"></i> Report Issue
+            </a>
+            <a class="btn-primary-solid" th:href="@{/dashboard}">
+                <i class="fa fa-tachometer-alt"></i>
+                <span th:text="#{nav.dashboard}">Dashboard</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- HERO -->
+    <section class="hero">
+
+        <!-- IIT Patna badge -->
+        <div class="iitp-badge">
+            <div class="dot"></div>
+            IIT Patna — Official Campus Portal
+        </div>
+
+        <h1 class="hero-title">
+            <span th:text="#{hero.title}">Keep the campus safe, clean &amp; working.</span><br>
+            <span class="grad">Report Issues in Seconds.</span>
+        </h1>
+
+        <p class="hero-sub hero-sub-typing">
+            <span id="typingText"
+                  th:attr="aria-label=#{hero.typingText},data-typing-text=#{hero.typingText}"></span>
+            <span class="typing-caret" aria-hidden="true"></span>
+        </p>
+
+        <!-- Stats bar -->
+        <div class="stats-bar">
+            <div class="stat-item">
+                <div class="stat-number">500+</div>
+                <div class="stat-label">Issues Resolved</div>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+                <div class="stat-number">48h</div>
+                <div class="stat-label">Avg. Response</div>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+                <div class="stat-number">95%</div>
+                <div class="stat-label">Satisfaction</div>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+                <div class="stat-number">24/7</div>
+                <div class="stat-label">Available</div>
+            </div>
+        </div>
+
+        <!-- Feature cards -->
+        <div class="info-cards info-cards-hero">
+            <div class="info-card">
+                <span class="icon">⚡</span>
+                <h4 th:text="#{card.fastReporting}">Fast Reporting</h4>
+                <p th:text="#{card.fastReportingDesc}">Submit issues with clear location details and photos in under a minute.</p>
+            </div>
+            <div class="info-card">
+                <span class="icon">🕵️</span>
+                <h4 th:text="#{card.anonymousOption}">Anonymous Option</h4>
+                <p th:text="#{card.anonymousOptionDesc}">Report sensitive issues without revealing your identity.</p>
+            </div>
+            <div class="info-card">
+                <span class="icon">📊</span>
+                <h4 th:text="#{card.statusTracking}">Real-time Tracking</h4>
+                <p th:text="#{card.statusTrackingDesc}">Track your issue from submission to full resolution with live updates.</p>
+            </div>
+            <div class="info-card">
+                <span class="icon">🗺️</span>
+                <h4>Location Mapping</h4>
+                <p>Pin the exact location of an issue on campus map for accurate dispatch.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- HOW IT WORKS + CTA -->
+    <section class="scroll-section">
+
+        <h2 class="scroll-section-title">How It <span>Works</span></h2>
+
+        <div class="steps-row">
+            <div class="step-card">
+                <div class="step-number">1</div>
+                <h5>Sign In</h5>
+                <p>Log in with your IIT Patna credentials to get started.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-number">2</div>
+                <h5>Choose Category</h5>
+                <p>Select the type — Academic, Hostel, Payments, or Other.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-number">3</div>
+                <h5>Report Issue</h5>
+                <p>Fill in details, attach a photo and pin the location on the map.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-number">4</div>
+                <h5>Track Progress</h5>
+                <p>Receive updates as staff resolve your issue. Rate the response.</p>
+            </div>
+        </div>
+
+        <!-- Buttons: anonymous = login/register, authenticated = dashboard -->
+        <div class="big-actions" th:if="${#authorization.expression('isAnonymous()')}">
+            <a class="btn btn-primary-solid btn-xl" th:href="@{/login}">
+                <i class="fa fa-sign-in-alt me-2"></i>
+                <span th:text="#{nav.login}">Login</span>
+            </a>
+            <a class="btn btn-outline-light btn-xl" th:href="@{/signup}">
+                <i class="fa fa-user-plus me-2"></i>
+                <span th:text="#{nav.register}">Register</span>
+            </a>
+        </div>
+
+        <div class="big-actions" th:if="${#authorization.expression('isAuthenticated()')}">
+            <a class="btn btn-primary-solid btn-xl" th:href="@{/dashboard}">
+                <i class="fa fa-tachometer-alt me-2"></i>
+                <span th:text="#{nav.goDashboard}">Go to Dashboard</span>
+            </a>
+            <a class="btn btn-outline-light btn-xl" th:href="@{/report-options}"
+               sec:authorize="hasRole('STUDENT')">
+                <i class="fa fa-plus me-2"></i> Report New Issue
+            </a>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer-strip">
+        &copy; 2024 IIT Patna — Campus Issue &amp; Tracking System. All rights reserved.
+    </footer>
+
+</main>
+
+<!-- Parallax -->
+<script>
+(function () {
+    const bg = document.querySelector(".bg-layer");
+    if (!bg) return;
+    let latestY = 0, ticking = false;
+    function update() {
+        ticking = false;
+        bg.style.transform = `translate3d(0,${latestY * 0.18}px,0) scale(1.06)`;
+    }
+    window.addEventListener("scroll", function () {
+        latestY = window.scrollY || 0;
+        if (!ticking) { ticking = true; requestAnimationFrame(update); }
+    }, { passive: true });
+})();
+</script>
+
+<!-- Typing effect -->
+<script>
+(function () {
+    const el = document.getElementById("typingText");
+    if (!el) return;
+    const fullText = el.getAttribute("data-typing-text") || "Report infrastructure problems. Raise academic concerns. Fix hostel issues.";
+    const typeSpeed = 28, pauseAfter = 1200, deleteSpeed = 14, pauseBefore = 400;
+    let i = 0, deleting = false;
+    function tick() {
+        if (!deleting) {
+            i++;
+            el.textContent = fullText.slice(0, i);
+            if (i >= fullText.length) { setTimeout(() => { deleting = true; tick(); }, pauseAfter); return; }
+            setTimeout(tick, typeSpeed);
+        } else {
+            i--;
+            el.textContent = fullText.slice(0, i);
+            if (i <= 0) { deleting = false; setTimeout(tick, pauseBefore); return; }
+            setTimeout(tick, deleteSpeed);
+        }
+    }
+    tick();
+})();
+</script>
+
+<!-- Counter animation -->
+<script>
+(function () {
+    const numbers = document.querySelectorAll('.stat-number');
+    const observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.animation = 'fadeUp 0.6s ease forwards';
+                observer.unobserve(entry.target);
+            }
+        });
+    }, { threshold: 0.5 });
+    numbers.forEach(n => observer.observe(n));
+})();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

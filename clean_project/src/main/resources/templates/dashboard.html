@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security"
+    th:lang="${#locale.language}">
+
+<head>
+    <title>Dashboard - Campus Issue Tracker</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <meta name="_csrf" th:content="${_csrf.token}"/>
+    <meta name="_csrf_header" th:content="${_csrf.headerName}"/>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <link th:href="@{/css/dashboard.css}" rel="stylesheet">
+</head>
+
+<body>
+
+<!-- ===== TOP NAV ===== -->
+<nav class="dash-topnav">
+    <a href="/" class="dash-brand">
+        <img th:src="@{/images/iitp-logo.png}" alt="IIT Patna"/>
+        <div class="dash-brand-text">
+            Campus Issue Tracker
+            <small>IIT Patna</small>
+        </div>
+    </a>
+
+    <div class="dash-nav-actions">
+        <!-- Language switcher -->
+        <div th:replace="~{fragments/language-switcher :: language-switcher}"></div>
+
+        <!-- Report button — students only -->
+        <a th:href="@{/report-options}" class="btn-nav-action btn-success-solid"
+           sec:authorize="hasRole('STUDENT')">
+            <i class="fa fa-plus"></i>
+            <span th:text="#{dashboard.reportNew}">Report Issue</span>
+        </a>
+
+        <!-- Audit trail — staff/admin only -->
+        <a th:href="@{/audit-trail}" class="btn-nav-action btn-info-solid"
+           sec:authorize="hasAnyRole('STAFF','ADMIN')">
+            <i class="fa fa-history"></i>
+            <span th:text="#{dashboard.auditTrail}">Audit Trail</span>
+        </a>
+
+        <!-- Notification bell -->
+        <button class="nav-icon-btn" id="notifToggle" title="Notifications" onclick="toggleNotifPanel()">
+            <i class="fa fa-bell"></i>
+            <span class="notif-badge" id="notifCount" style="display:none;">0</span>
+        </button>
+
+        <!-- User pill -->
+        <div class="user-pill">
+            <div class="user-avatar" id="userAvatarInitial">?</div>
+            <span id="userNameDisplay" sec:authentication="name">User</span>
+        </div>
+
+        <!-- Logout -->
+        <form th:action="@{/logout}" method="post" style="margin:0;display:contents;">
+            <button type="submit" class="btn-nav-action btn-danger-solid">
+                <i class="fa fa-sign-out-alt"></i> Logout
+            </button>
+        </form>
+    </div>
+</nav>
+
+<!-- ===== NOTIFICATION PANEL ===== -->
+<div class="notif-panel" id="notifPanel">
+    <div class="notif-panel-header">
+        <span class="notif-panel-title"><i class="fa fa-bell me-2"></i>Notifications</span>
+        <button onclick="clearNotifications()" style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;">
+            Clear All
+        </button>
+    </div>
+    <div class="notif-panel-body" id="notifList">
+        <div class="notif-empty">
+            <i class="fa fa-bell-slash" style="font-size:32px;display:block;margin-bottom:10px;opacity:0.3;"></i>
+            No notifications yet
+        </div>
+    </div>
+</div>
+
+<!-- ===== MAIN ===== -->
+<div class="dash-main">
+
+    <!-- Stat cards -->
+    <div class="stats-grid" id="statsGrid"
+         th:data-total="${totalIssues}"
+         th:data-pending="${pendingCount}"
+         th:data-progress="${progressCount}"
+         th:data-resolved="${resolvedCount}">
+        <div class="stat-card stat-card-blue">
+            <div class="stat-icon stat-icon-blue"><i class="fa fa-list-alt"></i></div>
+            <div class="stat-info">
+                <div class="stat-value" id="statTotal">—</div>
+                <div class="stat-name">Total Issues</div>
+                <div class="stat-bar"><div class="stat-bar-fill stat-bar-blue" id="barTotal"></div></div>
+            </div>
+        </div>
+        <div class="stat-card stat-card-orange">
+            <div class="stat-icon stat-icon-orange"><i class="fa fa-clock"></i></div>
+            <div class="stat-info">
+                <div class="stat-value" id="statPending">—</div>
+                <div class="stat-name">Pending</div>
+                <div class="stat-bar"><div class="stat-bar-fill stat-bar-orange" id="barPending"></div></div>
+            </div>
+        </div>
+        <div class="stat-card stat-card-purple">
+            <div class="stat-icon stat-icon-purple"><i class="fa fa-spinner fa-spin"></i></div>
+            <div class="stat-info">
+                <div class="stat-value" id="statProgress">—</div>
+                <div class="stat-name">In Progress</div>
+                <div class="stat-bar"><div class="stat-bar-fill stat-bar-purple" id="barProgress"></div></div>
+            </div>
+        </div>
+        <div class="stat-card stat-card-green">
+            <div class="stat-icon stat-icon-green"><i class="fa fa-check-circle"></i></div>
+            <div class="stat-info">
+                <div class="stat-value" id="statResolved">—</div>
+                <div class="stat-name">Resolved</div>
+                <div class="stat-bar"><div class="stat-bar-fill stat-bar-green" id="barResolved"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search/filter -->
+    <div class="filter-card">
+        <form th:action="@{/dashboard}" method="get" class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label for="q" class="form-label">Search</label>
+                <input type="text" class="form-control" id="q" name="q" th:value="${q}"
+                       placeholder="Title, location...">
+            </div>
+            <div class="col-md-2">
+                <label for="category" class="form-label">Category</label>
+                <select class="form-select" id="category" name="category">
+                    <option value="">All Categories</option>
+                    <option th:each="cat : ${T(com.campus.issue_tracker.entity.IssueCategory).values()}"
+                            th:if="${cat.name() != 'CAFETERIA'}"
+                            th:value="${cat}" th:text="${cat}"
+                            th:selected="${cat == category}"></option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="status" class="form-label">Status</label>
+                <select class="form-select" id="status" name="status">
+                    <option value="">All Statuses</option>
+                    <option th:each="stat : ${T(com.campus.issue_tracker.entity.IssueStatus).values()}"
+                            th:value="${stat}" th:text="${stat}"
+                            th:selected="${stat == status}"></option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label for="dateRange" class="form-label">Date Range</label>
+                <select class="form-select" id="dateRange" name="dateRange">
+                    <option value="">Any Time</option>
+                    <option value="today"  th:selected="${dateRange == 'today'}">Today</option>
+                    <option value="7days"  th:selected="${dateRange == '7days'}">Last 7 Days</option>
+                    <option value="30days" th:selected="${dateRange == '30days'}">Last 30 Days</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button type="submit" class="btn-filter btn">
+                    <i class="fa fa-search me-1"></i> Filter
+                </button>
+                <a th:href="@{/dashboard}" class="btn-reset btn">
+                    <i class="fa fa-times me-1"></i> Reset
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Issues table -->
+    <div class="issues-card">
+        <div class="issues-card-header">
+            <h5 class="issues-card-title">
+                <span class="title-dot"></span>
+                Campus Issues
+            </h5>
+            <span class="text-muted" style="font-size:13px;font-weight:600;">
+                Showing <th:block th:text="${issues.size()}">0</th:block> issues
+            </span>
+        </div>
+
+        <div th:if="${issues.isEmpty()}" class="empty-state">
+            <i class="fa fa-inbox"></i>
+            <h5>No issues found</h5>
+            <p>Try adjusting your filters or report a new issue.</p>
+        </div>
+
+        <div th:unless="${issues.isEmpty()}" class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Title</th>
+                        <th>Category</th>
+                        <th>Location</th>
+                        <th>Status</th>
+                        <th>Reporter</th>
+                        <th>Feedback</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="issue : ${issues}">
+                        <td class="fw-bold text-muted" style="font-size:12px;" th:text="${issue.id}"></td>
+
+                        <td class="fw-bold" style="max-width:180px;">
+                            <span th:text="${issue.title}" style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+                        </td>
+
+                        <td>
+                            <span class="badge badge-category" th:text="${issue.category}"></span>
+                        </td>
+
+                        <td style="font-size:13px;color:#64748b;" th:text="${issue.location}"></td>
+
+                        <td>
+                            <span th:class="'badge ' + ${issue.status.name() == 'PENDING' ? 'badge-pending' :
+                                   (issue.status.name() == 'IN_PROGRESS' ? 'badge-progress' :
+                                   (issue.status.name() == 'RESOLVED' ? 'badge-resolved' : 'badge-rejected'))}"
+                                  th:text="${issue.status}"></span>
+                        </td>
+
+                        <!-- Reporter -->
+                        <td>
+                            <span th:if="${issue.anonymous and !#authorization.expression('hasAnyRole(''STAFF'', ''ADMIN'')') and (#authentication.name != issue.reporter.username)}"
+                                  class="text-muted" style="font-size:13px;">
+                                <i class="fa fa-user-secret me-1"></i>Anonymous
+                            </span>
+                            <span th:unless="${issue.anonymous and !#authorization.expression('hasAnyRole(''STAFF'', ''ADMIN'')') and (#authentication.name != issue.reporter.username)}"
+                                  style="font-size:13px;font-weight:600;"
+                                  th:text="${issue.reporter.username}"></span>
+                        </td>
+
+                        <!-- Feedback -->
+                        <td th:if="${#authorization.expression('hasAnyRole(''STAFF'', ''ADMIN'')') or (#authentication.name == issue.reporter.username)}">
+                            <span th:if="${issue.rating}" class="text-warning" style="font-size:13px;">
+                                <span th:each="i : ${#numbers.sequence(1, issue.rating)}">&#9733;</span>
+                            </span>
+                            <small class="d-block text-muted" style="font-size:11px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+                                   th:text="${issue.studentFeedback != null ? issue.studentFeedback : 'No feedback'}"></small>
+                        </td>
+                        <td th:unless="${#authorization.expression('hasAnyRole(''STAFF'', ''ADMIN'')') or (#authentication.name == issue.reporter.username)}">
+                            <span class="text-muted" style="font-size:12px;">Private</span>
+                        </td>
+
+                        <!-- Actions -->
+                        <td>
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <!-- View details -->
+                                <button type="button" class="btn-view-details"
+                                    th:if="${!issue.anonymous or #authorization.expression('hasAnyRole(''STAFF'', ''ADMIN'')') or (issue.reporter.username == #authentication.name)}"
+                                    data-bs-toggle="modal" data-bs-target="#issueModal"
+                                    th:data-id="${issue.id}"
+                                    th:data-title="${issue.title}"
+                                    th:data-category="${issue.category}"
+                                    th:data-desc="${issue.description}"
+                                    th:data-loc="${issue.location}"
+                                    th:data-status="${issue.status}"
+                                    th:data-reporter="${issue.reporter.username}"
+                                    th:data-feedback="${issue.studentFeedback}"
+                                    th:data-rating="${issue.rating}"
+                                    th:data-is-reporter="${issue.reporter.username == #authentication.name}"
+                                    th:data-lat="${issue.latitude}"
+                                    th:data-lng="${issue.longitude}"
+                                    th:data-attachment="${issue.attachmentPath}">
+                                    <i class="fa fa-eye me-1"></i>View
+                                </button>
+
+                                <span class="text-muted" style="font-size:12px;"
+                                    th:unless="${!issue.anonymous or #authorization.expression('hasAnyRole(''STAFF'', ''ADMIN'')') or (issue.reporter.username == #authentication.name)}">
+                                    Staff only
+                                </span>
+
+                                <!-- Status update — staff/admin -->
+                                <div th:if="${#authorization.expression('hasAnyRole(''STAFF'', ''ADMIN'')')}"
+                                     class="status-update-group">
+                                    <select class="status-select form-select form-select-sm"
+                                            th:id="'status-' + ${issue.id}">
+                                        <option th:selected="${issue.status.name() == 'PENDING'}"    value="PENDING">PENDING</option>
+                                        <option th:selected="${issue.status.name() == 'IN_PROGRESS'}" value="IN_PROGRESS">IN PROGRESS</option>
+                                        <option th:selected="${issue.status.name() == 'RESOLVED'}"   value="RESOLVED">RESOLVED</option>
+                                        <option th:selected="${issue.status.name() == 'REJECTED'}"   value="REJECTED">REJECTED</option>
+                                    </select>
+                                    <button class="btn-update-status btn"
+                                            th:onclick="'updateStatus(' + ${issue.id} + ')'"
+                                            th:text="#{dashboard.update}">Update</button>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="p-3" th:if="${totalPages > 1}">
+            <nav>
+                <ul class="pagination justify-content-center mb-0">
+                    <li class="page-item" th:classappend="${currentPage == 0} ? 'disabled'">
+                        <a class="page-link"
+                           th:href="@{/dashboard(page=${currentPage-1},q=${q},category=${category},status=${status},dateRange=${dateRange})}">
+                            <i class="fa fa-chevron-left"></i>
+                        </a>
+                    </li>
+                    <li class="page-item" th:each="i : ${#numbers.sequence(0, totalPages-1)}"
+                        th:classappend="${i == currentPage} ? 'active'">
+                        <a class="page-link"
+                           th:href="@{/dashboard(page=${i},q=${q},category=${category},status=${status},dateRange=${dateRange})}"
+                           th:text="${i+1}"></a>
+                    </li>
+                    <li class="page-item" th:classappend="${currentPage+1 >= totalPages} ? 'disabled'">
+                        <a class="page-link"
+                           th:href="@{/dashboard(page=${currentPage+1},q=${q},category=${category},status=${status},dateRange=${dateRange})}">
+                            <i class="fa fa-chevron-right"></i>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </div><!-- /issues-card -->
+</div><!-- /dash-main -->
+
+<!-- ===== ISSUE DETAIL MODAL ===== -->
+<div class="modal fade" id="issueModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fa fa-info-circle me-2"></i>Issue Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-info-grid">
+                    <div class="modal-info-item">
+                        <div class="modal-info-label">ID</div>
+                        <div class="modal-info-value" id="modalId">—</div>
+                    </div>
+                    <div class="modal-info-item">
+                        <div class="modal-info-label">Status</div>
+                        <div class="modal-info-value" id="modalStatus">—</div>
+                    </div>
+                    <div class="modal-info-item">
+                        <div class="modal-info-label">Title</div>
+                        <div class="modal-info-value" id="modalIssueTitle">—</div>
+                    </div>
+                    <div class="modal-info-item">
+                        <div class="modal-info-label">Category</div>
+                        <div class="modal-info-value" id="modalCategory">—</div>
+                    </div>
+                    <div class="modal-info-item" style="grid-column:1/-1;">
+                        <div class="modal-info-label">Description</div>
+                        <div class="modal-info-value" id="modalDesc" style="font-size:14px;font-weight:500;color:#475569;white-space:pre-wrap;">—</div>
+                    </div>
+                    <div class="modal-info-item">
+                        <div class="modal-info-label">Location</div>
+                        <div class="modal-info-value" id="modalLoc">—</div>
+                    </div>
+                    <div class="modal-info-item">
+                        <div class="modal-info-label">Reporter</div>
+                        <div class="modal-info-value" id="modalReporter">—</div>
+                    </div>
+                </div>
+
+                <!-- Map -->
+                <div class="mb-4">
+                    <h6 class="fw-bold mb-2" style="color:#1e293b;"><i class="fa fa-map-marker-alt me-2 text-danger"></i>Issue Location</h6>
+                    <div id="issueMap"></div>
+                    <div id="mapPlaceholder" class="map-placeholder" style="display:none;">
+                        <i class="fa fa-map-marked-alt" style="font-size:36px;opacity:0.3;margin-bottom:10px;display:block;"></i>
+                        <span>No location data available</span>
+                    </div>
+                </div>
+
+                <!-- Attachment -->
+                <div id="attachmentBlock" style="display:none;" class="mb-4">
+                    <h6 class="fw-bold mb-2" style="color:#1e293b;"><i class="fa fa-paperclip me-2"></i>Attachment</h6>
+                    <a id="attachmentLink" target="_blank" class="btn btn-sm"
+                       style="background:#f1f5f9;border:1.5px solid #e2e8f0;color:#475569;border-radius:10px;font-weight:700;">
+                        <i class="fa fa-external-link-alt me-1"></i>View Attachment
+                    </a>
+                </div>
+
+                <hr style="border-color:#f1f5f9;"/>
+
+                <!-- Existing feedback -->
+                <div id="feedbackSection" class="mb-4">
+                    <h6 class="fw-bold mb-2" style="color:#1e293b;"><i class="fa fa-star me-2 text-warning"></i>Current Feedback</h6>
+                    <div id="modalStars" class="text-warning mb-1" style="font-size:18px;"></div>
+                    <p id="modalFeedback" class="text-muted" style="font-size:14px;margin:0;">No feedback yet.</p>
+                </div>
+
+                <!-- Add/update feedback (students — reporter only) -->
+                <div class="mt-2" sec:authorize="hasRole('STUDENT')">
+                    <h6 class="fw-bold mb-3" style="color:#1e293b;"><i class="fa fa-edit me-2"></i>Add / Update Feedback</h6>
+                    <textarea class="form-control feedback-input mb-3" id="feedbackInput" rows="3"
+                        placeholder="Share your feedback about how this issue was handled…" disabled></textarea>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold" style="font-size:13px;color:#475569;">Rating</label>
+                        <select class="form-select" id="ratingInput" disabled
+                                style="border-radius:12px;border:1.5px solid #e2e8f0;font-weight:600;font-size:14px;">
+                            <option value="">No rating</option>
+                            <option value="1">1 ⭐</option>
+                            <option value="2">2 ⭐⭐</option>
+                            <option value="3">3 ⭐⭐⭐</option>
+                            <option value="4">4 ⭐⭐⭐⭐</option>
+                            <option value="5">5 ⭐⭐⭐⭐⭐</option>
+                        </select>
+                    </div>
+                    <button class="btn-submit-feedback btn" onclick="submitFeedback()">
+                        <i class="fa fa-paper-plane me-2"></i>Submit Feedback
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+// ===== CSRF =====
+const csrfToken  = document.querySelector('meta[name="_csrf"]')?.getAttribute('content');
+const csrfHeader = document.querySelector('meta[name="_csrf_header"]')?.getAttribute('content');
+
+// ===== USER AVATAR INITIAL =====
+(function () {
+    const name = document.getElementById('userNameDisplay')?.textContent?.trim() || '?';
+    const av = document.getElementById('userAvatarInitial');
+    if (av) av.textContent = name.charAt(0).toUpperCase();
+})();
+
+// ===== STAT CARDS — read from server-side data attributes =====
+(function () {
+    const grid = document.getElementById('statsGrid');
+    if (!grid) return;
+    const total    = parseInt(grid.dataset.total    || '0', 10);
+    const pending  = parseInt(grid.dataset.pending  || '0', 10);
+    const progress = parseInt(grid.dataset.progress || '0', 10);
+    const resolved = parseInt(grid.dataset.resolved || '0', 10);
+
+    animateCounter(document.getElementById('statTotal'),    total);
+    animateCounter(document.getElementById('statPending'),  pending);
+    animateCounter(document.getElementById('statProgress'), progress);
+    animateCounter(document.getElementById('statResolved'), resolved);
+
+    // Progress bars (relative to total, min 4% so bar is visible)
+    setTimeout(() => {
+        const pct = (v) => total > 0 ? Math.max(4, Math.round(v / total * 100)) : 0;
+        const setBar = (id, v) => { const el = document.getElementById(id); if (el) el.style.width = pct(v) + '%'; };
+        setBar('barTotal',    total);
+        setBar('barPending',  pending);
+        setBar('barProgress', progress);
+        setBar('barResolved', resolved);
+        document.getElementById('barTotal').style.width = '100%';
+    }, 300);
+})();
+
+function animateCounter(el, target) {
+    let current = 0;
+    const step = Math.ceil(target / 20);
+    const timer = setInterval(() => {
+        current = Math.min(current + step, target);
+        el.textContent = current;
+        if (current >= target) clearInterval(timer);
+    }, 40);
+}
+
+// ===== MAP =====
+let selectedIssueId = null;
+let mapInstance     = null;
+
+const issueModalEl = document.getElementById('issueModal');
+
+issueModalEl.addEventListener('show.bs.modal', function (event) {
+    const btn = event.relatedTarget;
+    if (!btn) return;
+
+    selectedIssueId = btn.getAttribute('data-id') || '';
+
+    document.getElementById('modalId').textContent          = selectedIssueId;
+    document.getElementById('modalIssueTitle').textContent  = btn.getAttribute('data-title') || '';
+    document.getElementById('modalCategory').textContent    = btn.getAttribute('data-category') || '—';
+    document.getElementById('modalDesc').textContent        = btn.getAttribute('data-desc') || '';
+    document.getElementById('modalLoc').textContent         = btn.getAttribute('data-loc') || '';
+    document.getElementById('modalStatus').textContent      = btn.getAttribute('data-status') || '';
+    document.getElementById('modalReporter').textContent    = btn.getAttribute('data-reporter') || '';
+
+    const rating     = btn.getAttribute('data-rating') || '';
+    const feedback   = btn.getAttribute('data-feedback') || '';
+    const isReporter = btn.getAttribute('data-is-reporter') === 'true';
+    const attachment = btn.getAttribute('data-attachment') || '';
+    const latAttr    = btn.getAttribute('data-lat');
+    const lngAttr    = btn.getAttribute('data-lng');
+
+    // Stars
+    const starsDiv = document.getElementById('modalStars');
+    starsDiv.innerHTML = '';
+    if (rating) { const r = parseInt(rating); for (let i=0;i<r;i++) starsDiv.innerHTML += '&#9733;'; }
+    document.getElementById('modalFeedback').textContent = feedback || 'No feedback yet.';
+
+    // Feedback inputs
+    const fi = document.getElementById('feedbackInput');
+    const ri = document.getElementById('ratingInput');
+    if (fi) fi.disabled = !isReporter;
+    if (ri) ri.disabled = !isReporter;
+    if (fi && feedback && isReporter) fi.value = feedback;
+    if (ri && rating  && isReporter) ri.value = rating;
+
+    // Attachment
+    const ab = document.getElementById('attachmentBlock');
+    const al = document.getElementById('attachmentLink');
+    if (attachment && attachment.trim()) {
+        ab.style.display = 'block';
+        al.href = '/uploads/' + attachment;
+    } else {
+        ab.style.display = 'none';
+    }
+
+    // Destroy old map
+    if (mapInstance) { mapInstance.remove(); mapInstance = null; }
+    const mapDiv  = document.getElementById('issueMap');
+    const mapPh   = document.getElementById('mapPlaceholder');
+    const lat = latAttr ? parseFloat(latAttr) : NaN;
+    const lng = lngAttr ? parseFloat(lngAttr) : NaN;
+
+    if (!isNaN(lat) && !isNaN(lng)) {
+        mapDiv.style.display = 'block';
+        mapPh.style.display  = 'none';
+    } else {
+        mapDiv.style.display = 'none';
+        mapPh.style.display  = 'flex';
+    }
+});
+
+// Initialize map AFTER modal is fully shown (fixes broken tile bug)
+issueModalEl.addEventListener('shown.bs.modal', function () {
+    const mapDiv = document.getElementById('issueMap');
+    if (mapDiv.style.display === 'none') return;
+
+    const btn = document.querySelector('[data-bs-target="#issueModal"]');
+    // Find the currently open modal's trigger button
+    const openBtn = document.querySelector('.btn-view-details[data-id="' + selectedIssueId + '"]');
+    if (!openBtn) return;
+
+    const lat = parseFloat(openBtn.getAttribute('data-lat'));
+    const lng = parseFloat(openBtn.getAttribute('data-lng'));
+    if (isNaN(lat) || isNaN(lng)) return;
+
+    try {
+        mapInstance = L.map('issueMap').setView([lat, lng], 17);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+        }).addTo(mapInstance);
+        L.marker([lat, lng])
+            .addTo(mapInstance)
+            .bindPopup('<strong>Issue Location</strong><br>Lat: ' + lat.toFixed(5) + ', Lng: ' + lng.toFixed(5))
+            .openPopup();
+        mapInstance.invalidateSize();
+    } catch(e) { console.error('Map init error:', e); }
+});
+
+issueModalEl.addEventListener('hidden.bs.modal', function () {
+    if (mapInstance) { mapInstance.remove(); mapInstance = null; }
+    const fi = document.getElementById('feedbackInput');
+    const ri = document.getElementById('ratingInput');
+    if (fi) { fi.value = ''; fi.disabled = true; }
+    if (ri) { ri.value = ''; ri.disabled = true; }
+});
+
+// ===== STATUS UPDATE =====
+function updateStatus(issueId) {
+    const sel = document.getElementById('status-' + issueId);
+    if (!sel) return;
+    const selected = sel.value;
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (csrfToken && csrfHeader) headers[csrfHeader] = csrfToken;
+
+    fetch(`/api/issues/${issueId}/status?status=${selected}`, {
+        method: 'PATCH', headers
+    })
+    .then(r => {
+        if (r.ok) {
+            showToast('Status updated to ' + selected, false);
+            addNotification('Issue #' + issueId + ' status changed to ' + selected, selected);
+            setTimeout(() => window.location.reload(), 900);
+        } else {
+            showToast('Failed to update status', true);
+        }
+    })
+    .catch(() => showToast('Network error', true));
+}
+
+// ===== FEEDBACK =====
+function submitFeedback() {
+    const feedback = document.getElementById('feedbackInput')?.value || '';
+    const rating   = document.getElementById('ratingInput')?.value   || '';
+    const params   = new URLSearchParams();
+    if (feedback) params.append('feedback', feedback);
+    if (rating)   params.append('rating',   rating);
+
+    const headers = { 'Content-Type': 'application/json' };
+    if (csrfToken && csrfHeader) headers[csrfHeader] = csrfToken;
+
+    fetch(`/api/issues/${selectedIssueId}/feedback?` + params, { method: 'PATCH', headers })
+    .then(r => {
+        if (r.ok) { showToast('Feedback submitted!', false); setTimeout(() => window.location.reload(), 800); }
+        else       showToast('Failed to submit feedback', true);
+    })
+    .catch(() => showToast('Network error', true));
+}
+
+// ===== TOAST =====
+function showToast(msg, isError = false) {
+    const c = document.getElementById('toastContainer');
+    const t = document.createElement('div');
+    t.className = 'dash-toast' + (isError ? ' toast-error' : '');
+    t.innerHTML = `<i class="fa ${isError ? 'fa-times-circle text-danger' : 'fa-check-circle text-success'}"></i> ${msg}`;
+    c.appendChild(t);
+    setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(40px)'; t.style.transition='all 0.4s'; setTimeout(() => t.remove(), 400); }, 3000);
+}
+
+// ===== NOTIFICATIONS =====
+let notifications = JSON.parse(localStorage.getItem('campus_notifs') || '[]');
+
+function renderNotifications() {
+    const list  = document.getElementById('notifList');
+    const badge = document.getElementById('notifCount');
+    if (!list) return;
+
+    if (notifications.length === 0) {
+        list.innerHTML = '<div class="notif-empty"><i class="fa fa-bell-slash" style="font-size:32px;display:block;margin-bottom:10px;opacity:0.3;"></i>No notifications yet</div>';
+        badge.style.display = 'none';
+        return;
+    }
+
+    badge.style.display = 'flex';
+    badge.textContent = Math.min(notifications.length, 9) + (notifications.length > 9 ? '+' : '');
+
+    list.innerHTML = notifications.slice(0, 15).map(n => `
+        <div class="notif-item">
+            <div class="notif-icon-wrap notif-icon-${n.type}">
+                <i class="fa ${n.icon}"></i>
+            </div>
+            <div class="notif-text">
+                <div class="notif-title">${n.title}</div>
+                <div class="notif-time">${n.time}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function addNotification(title, status) {
+    const icons = { RESOLVED:'fa-check-circle', IN_PROGRESS:'fa-spinner', PENDING:'fa-clock', REJECTED:'fa-times-circle' };
+    const types = { RESOLVED:'resolved', IN_PROGRESS:'progress', PENDING:'pending', REJECTED:'rejected' };
+    const n = {
+        title,
+        icon: icons[status] || 'fa-info-circle',
+        type: types[status] || 'pending',
+        time: new Date().toLocaleTimeString()
+    };
+    notifications.unshift(n);
+    localStorage.setItem('campus_notifs', JSON.stringify(notifications));
+    renderNotifications();
+}
+
+function toggleNotifPanel() {
+    const p = document.getElementById('notifPanel');
+    p.classList.toggle('open');
+}
+
+function clearNotifications() {
+    notifications = [];
+    localStorage.removeItem('campus_notifs');
+    renderNotifications();
+}
+
+// Close notif panel on outside click
+document.addEventListener('click', function(e) {
+    const panel = document.getElementById('notifPanel');
+    const btn   = document.getElementById('notifToggle');
+    if (panel && btn && !panel.contains(e.target) && !btn.contains(e.target)) {
+        panel.classList.remove('open');
+    }
+});
+
+// Init
+renderNotifications();
+</script>
+</body>
+</html>
